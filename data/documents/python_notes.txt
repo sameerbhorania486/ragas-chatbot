@@ -1,0 +1,19 @@
+Python Programming Notes
+
+Python is a high-level, interpreted and general-purpose
+programming language.
+
+Python was created by Guido van Rossum and first
+released in 1991.
+
+Python is widely used in Artificial Intelligence,
+Machine Learning, Data Science and Web Development.
+
+Python supports data types such as integers, floats,
+strings, booleans, lists, tuples, sets and dictionaries.
+
+A function is a reusable block of code that performs
+a specific task.
+
+A class is a blueprint for creating objects.
+An object is an instance of a class.
