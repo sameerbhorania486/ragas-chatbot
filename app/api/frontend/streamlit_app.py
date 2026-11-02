@@ -1,4 +1,4 @@
-
+import os
 import requests
 import streamlit as st
 import json
@@ -8,7 +8,11 @@ from pathlib import Path
 # CONFIGURATION
 # =====================================================
 
-API_BASE_URL = "http://127.0.0.1:8000/api/v1"
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://ragas-chatbot.onrender.com"
+)
+API_BASE_URL = f"{BACKEND_URL}/api/v1"
 REQUEST_TIMEOUT = 180
 
 st.set_page_config(
