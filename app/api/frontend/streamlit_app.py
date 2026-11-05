@@ -136,7 +136,7 @@ def api_post(endpoint, payload=None):
         )
 
     except requests.exceptions.ConnectionError:
-        st.error("Could not connect to backend server.")
+        st.error("Could not connect to backend.")
 
     except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
@@ -175,7 +175,7 @@ def api_patch(endpoint, payload):
         )
 
     except requests.exceptions.ConnectionError:
-        st.error("Could not connect to backend server.")
+        st.error("Could not connect to backend.")
 
     except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
@@ -213,7 +213,7 @@ def api_delete(endpoint):
         )
 
     except requests.exceptions.ConnectionError:
-        st.error("Could not connect to backend server.")
+        st.error("Could not connect to backend.")
 
     except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
@@ -272,31 +272,23 @@ def send_message(question):
             st.session_state.session_id
         )
 
-    # Save question for debugging
     st.session_state.debug_question = question
 
-    # Call backend API
     result = api_post(
         "/chat",
         payload,
     )
 
-    # SAVE RAW BACKEND RESPONSE
-    # This survives st.rerun()
-
     st.session_state.debug_response = result
 
     if not result:
-
         return
 
-    # Session ID
     st.session_state.session_id = result.get(
         "session_id",
         st.session_state.session_id,
     )
 
-    # Answer
     answer = result.get(
         "answer",
         result.get(
@@ -305,19 +297,16 @@ def send_message(question):
         ),
     )
 
-    # Sources
     sources = result.get(
         "sources",
         [],
     )
 
-    # Save user message
     st.session_state.messages.append({
         "role": "user",
         "content": question,
     })
 
-    # Save assistant message
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,
@@ -326,7 +315,7 @@ def send_message(question):
 
 
 # =====================================================
-# SOURCE DISPLAY
+# PROFESSIONAL SOURCE DISPLAY
 # =====================================================
 
 def display_sources(sources):
@@ -334,22 +323,71 @@ def display_sources(sources):
     if not sources:
         return
 
-    with st.expander("📚 View Sources"):
+    with st.expander(
+        "📚 Sources & References",
+        expanded=False,
+    ):
+
+        st.caption(
+            f"Retrieved {len(sources)} relevant source(s) "
+            "from your uploaded documents."
+        )
 
         for index, source in enumerate(
             sources,
             start=1,
         ):
 
-            st.markdown(
-                f"**Source {index}**"
-            )
+            st.divider()
 
             if isinstance(source, dict):
 
-                st.json(source)
+                filename = source.get(
+                    "filename",
+                    "Unknown document",
+                )
+
+                page = source.get("page")
+                chunk = source.get("chunk_index")
+
+                content = source.get(
+                    "content_preview",
+                    "",
+                )
+
+                st.markdown(
+                    f"**📄 Source {index}: {filename}**"
+                )
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    st.caption(
+                        f"Page: "
+                        f"{page if page is not None else 'N/A'}"
+                    )
+
+                with col2:
+
+                    st.caption(
+                        f"Chunk: "
+                        f"{chunk if chunk is not None else 'N/A'}"
+                    )
+
+                if content:
+
+                    st.markdown(
+                        "**Relevant content**"
+                    )
+
+                    st.info(content)
 
             else:
+
+                st.markdown(
+                    f"**Source {index}**"
+                )
 
                 st.write(source)
 
@@ -545,8 +583,6 @@ with st.sidebar:
         )
 
         with st.expander(f"💬 {title}"):
-
-            # OPEN CHAT
 
             if st.button(
                 "Open Chat",
@@ -829,14 +865,15 @@ with chat_tab:
 
         st.rerun()
 
-    # PERSISTENT DEBUG RESPONSE
-    # This is outside the question condition.
+    # DEBUG RESPONSE
+    # Collapsed by default so raw JSON does not
+    # distract users during normal chat.
 
     if st.session_state.debug_response is not None:
 
         with st.expander(
             "🔍 Debug: Backend API Response",
-            expanded=True,
+            expanded=False,
         ):
 
             st.caption(
@@ -856,7 +893,7 @@ with chat_tab:
 
         with st.expander(
             "🔍 Debug: Backend API Response",
-            expanded=True,
+            expanded=False,
         ):
 
             st.caption(
