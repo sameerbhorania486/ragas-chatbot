@@ -1,17 +1,26 @@
 import os
 import requests
 import streamlit as st
-import json
 from pathlib import Path
 
 # =====================================================
 # CONFIGURATION
 # =====================================================
 
-BACKEND_URL = os.getenv(
-    "BACKEND_URL",
-    "https://ragas-chatbot.onrender.com"
-)
+DEFAULT_BACKEND_URL = "https://ragas-chatbot.onrender.com"
+
+try:
+    BACKEND_URL = st.secrets.get(
+        "BACKEND_URL",
+        os.getenv("BACKEND_URL", DEFAULT_BACKEND_URL),
+    )
+except Exception:
+    BACKEND_URL = os.getenv(
+        "BACKEND_URL",
+        DEFAULT_BACKEND_URL,
+    )
+
+BACKEND_URL = BACKEND_URL.rstrip("/")
 API_BASE_URL = f"{BACKEND_URL}/api/v1"
 REQUEST_TIMEOUT = 180
 
@@ -31,6 +40,7 @@ defaults = {
     "messages": [],
     "evaluation_result": None,
     "generated_reports": {},
+    "refresh_documents": False,
 }
 
 for key, value in defaults.items():
@@ -42,6 +52,15 @@ for key, value in defaults.items():
 # API HELPERS
 # =====================================================
 
+def show_api_error(response, label="API Error"):
+    st.error(label)
+
+    try:
+        st.json(response.json())
+    except Exception:
+        st.code(response.text)
+
+
 def api_get(endpoint, params=None):
     try:
         response = requests.get(
@@ -49,12 +68,27 @@ def api_get(endpoint, params=None):
             params=params,
             timeout=REQUEST_TIMEOUT,
         )
+
         response.raise_for_status()
         return response.json()
 
-    except requests.RequestException as error:
+    except requests.exceptions.Timeout:
+        st.error("Backend request timed out.")
+
+    except requests.exceptions.HTTPError:
+        show_api_error(response, "HTTP Error")
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to backend.")
+
+    except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
-        return None
+
+    except ValueError:
+        st.error("Invalid JSON response from backend.")
+        st.code(response.text)
+
+    return None
 
 
 def api_post(endpoint, payload=None):
@@ -64,12 +98,27 @@ def api_post(endpoint, payload=None):
             json=payload,
             timeout=REQUEST_TIMEOUT,
         )
+
         response.raise_for_status()
         return response.json()
 
-    except requests.RequestException as error:
+    except requests.exceptions.Timeout:
+        st.error("Backend request timed out.")
+
+    except requests.exceptions.HTTPError:
+        show_api_error(response, "HTTP Error")
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to backend.")
+
+    except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
-        return None
+
+    except ValueError:
+        st.error("Invalid JSON response from backend.")
+        st.code(response.text)
+
+    return None
 
 
 def api_patch(endpoint, payload):
@@ -79,12 +128,27 @@ def api_patch(endpoint, payload):
             json=payload,
             timeout=REQUEST_TIMEOUT,
         )
+
         response.raise_for_status()
         return response.json()
 
-    except requests.RequestException as error:
+    except requests.exceptions.Timeout:
+        st.error("Backend request timed out.")
+
+    except requests.exceptions.HTTPError:
+        show_api_error(response, "HTTP Error")
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to backend.")
+
+    except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
-        return None
+
+    except ValueError:
+        st.error("Invalid JSON response from backend.")
+        st.code(response.text)
+
+    return None
 
 
 def api_delete(endpoint):
@@ -93,12 +157,27 @@ def api_delete(endpoint):
             f"{API_BASE_URL}{endpoint}",
             timeout=REQUEST_TIMEOUT,
         )
+
         response.raise_for_status()
         return response.json()
 
-    except requests.RequestException as error:
+    except requests.exceptions.Timeout:
+        st.error("Backend request timed out.")
+
+    except requests.exceptions.HTTPError:
+        show_api_error(response, "HTTP Error")
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to backend.")
+
+    except requests.exceptions.RequestException as error:
         st.error(f"API Error: {error}")
-        return None
+
+    except ValueError:
+        st.error("Invalid JSON response from backend.")
+        st.code(response.text)
+
+    return None
 
 
 # =====================================================
@@ -111,43 +190,86 @@ def new_chat():
 
 
 def load_chat(session_id):
-    result = api_get(f"/chat/{session_id}/history")
+    result = api_get(
+        f"/chat/{session_id}/history"
+    )
 
     if result is not None:
         st.session_state.session_id = session_id
 
-        # Backend returns messages inside "messages"
-        st.session_state.messages = result.get("messages", [])
+        st.session_state.messages = result.get(
+            "messages",
+            [],
+        )
 
 
 def send_message(question):
+
     payload = {
         "question": question,
     }
 
     if st.session_state.session_id:
-        payload["session_id"] = st.session_state.session_id
-
-    result = api_post("/chat", payload)
-
-    if result:
-        st.session_state.session_id = result.get(
-            "session_id",
-            st.session_state.session_id,
+        payload["session_id"] = (
+            st.session_state.session_id
         )
 
-        answer = result.get("answer", result.get("response", ""))
+    # Debug information
+    st.caption(f"Backend URL: {API_BASE_URL}")
 
-        st.session_state.messages.append({
-            "role": "user",
-            "content": question,
-        })
+    st.caption(
+        "Session: "
+        + (
+            st.session_state.session_id
+            or "New session"
+        )
+    )
 
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer,
-            "sources": result.get("sources", []),
-        })
+    # Call backend
+    result = api_post("/chat", payload)
+
+    # DEBUG RESPONSE
+    with st.expander(
+        "Debug: Backend API Response",
+        expanded=True,
+    ):
+
+        if result is not None:
+            st.json(result)
+
+        else:
+            st.warning(
+                "Backend returned no response."
+            )
+
+    if not result:
+        return
+
+    st.session_state.session_id = result.get(
+        "session_id",
+        st.session_state.session_id,
+    )
+
+    answer = result.get(
+        "answer",
+        result.get(
+            "response",
+            "No answer received from backend.",
+        ),
+    )
+
+    sources = result.get("sources", [])
+
+    st.session_state.messages.append({
+        "role": "user",
+        "content": question,
+    })
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": answer,
+        "sources": sources,
+    })
 
 
 # =====================================================
@@ -161,9 +283,14 @@ def display_sources(sources):
 
     with st.expander("📚 View Sources"):
 
-        for index, source in enumerate(sources, start=1):
+        for index, source in enumerate(
+            sources,
+            start=1,
+        ):
 
-            st.markdown(f"**Source {index}**")
+            st.markdown(
+                f"**Source {index}**"
+            )
 
             if isinstance(source, dict):
                 st.json(source)
@@ -185,7 +312,8 @@ def upload_document(uploaded_file):
                 "file": (
                     uploaded_file.name,
                     uploaded_file.getvalue(),
-                    uploaded_file.type,
+                    uploaded_file.type
+                    or "application/octet-stream",
                 )
             },
             timeout=REQUEST_TIMEOUT,
@@ -194,9 +322,26 @@ def upload_document(uploaded_file):
         response.raise_for_status()
         return response.json()
 
-    except requests.RequestException as error:
-        st.error(f"Document upload failed: {error}")
-        return None
+    except requests.exceptions.Timeout:
+        st.error("Document upload timed out.")
+
+    except requests.exceptions.HTTPError:
+        show_api_error(
+            response,
+            "Document upload failed.",
+        )
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to backend.")
+
+    except requests.exceptions.RequestException as error:
+        st.error(f"Upload failed: {error}")
+
+    except ValueError:
+        st.error("Invalid JSON response.")
+        st.code(response.text)
+
+    return None
 
 
 # =====================================================
@@ -214,36 +359,54 @@ def download_report(filename):
         response.raise_for_status()
         return response.content
 
-    except requests.RequestException as error:
-        st.error(f"Report download failed: {error}")
-        return None
+    except requests.exceptions.Timeout:
+        st.error("Report download timed out.")
+
+    except requests.exceptions.HTTPError:
+        show_api_error(
+            response,
+            "Report download failed.",
+        )
+
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to backend.")
+
+    except requests.exceptions.RequestException as error:
+        st.error(f"Download failed: {error}")
+
+    return None
 
 
 def find_report_filenames(data):
-    """Find report filenames inside the report API response."""
 
     found = []
 
     def scan(value):
+
         if isinstance(value, dict):
+
             for item in value.values():
                 scan(item)
 
         elif isinstance(value, list):
+
             for item in value:
                 scan(item)
 
         elif isinstance(value, str):
+
             name = Path(value).name
 
             if (
                 name.startswith("evaluation_")
-                and Path(name).suffix.lower() in {".json", ".csv", ".pdf"}
+                and Path(name).suffix.lower()
+                in {".json", ".csv", ".pdf"}
                 and name not in found
             ):
                 found.append(name)
 
     scan(data)
+
     return found
 
 
@@ -254,13 +417,20 @@ def find_report_filenames(data):
 with st.sidebar:
 
     st.title("🤖 RAGAS AI")
-    st.caption("Retrieval Augmented Generation Assistant")
+
+    st.caption(
+        "Retrieval Augmented Generation Assistant"
+    )
 
     st.divider()
 
     # NEW CHAT
 
-    if st.button("➕ New Chat", use_container_width=True):
+    if st.button(
+        "➕ New Chat",
+        use_container_width=True,
+    ):
+
         new_chat()
         st.rerun()
 
@@ -274,13 +444,21 @@ with st.sidebar:
 
     sessions = (
         sessions_data.get("sessions", [])
-        if sessions_data else []
+        if sessions_data
+        else []
     )
 
     for session in sessions:
 
-        session_id = session["session_id"]
-        title = session.get("title", "New Chat")
+        session_id = session.get("session_id")
+
+        if not session_id:
+            continue
+
+        title = session.get(
+            "title",
+            "New Chat",
+        )
 
         with st.expander(f"💬 {title}"):
 
@@ -289,6 +467,7 @@ with st.sidebar:
                 key=f"open_{session_id}",
                 use_container_width=True,
             ):
+
                 load_chat(session_id)
                 st.rerun()
 
@@ -310,7 +489,9 @@ with st.sidebar:
                 )
 
                 if result:
-                    st.success("Chat renamed successfully!")
+                    st.success(
+                        "Chat renamed successfully!"
+                    )
                     st.rerun()
 
             if st.button(
@@ -319,11 +500,16 @@ with st.sidebar:
                 use_container_width=True,
             ):
 
-                result = api_delete(f"/chat/{session_id}")
+                result = api_delete(
+                    f"/chat/{session_id}"
+                )
 
                 if result:
 
-                    if st.session_state.session_id == session_id:
+                    if (
+                        st.session_state.session_id
+                        == session_id
+                    ):
                         new_chat()
 
                     st.success("Chat deleted!")
@@ -332,6 +518,7 @@ with st.sidebar:
     # SEARCH CHAT
 
     st.divider()
+
     st.subheader("🔎 Search Chats")
 
     search_query = st.text_input(
@@ -339,7 +526,10 @@ with st.sidebar:
         key="search_query",
     )
 
-    if st.button("Search", use_container_width=True):
+    if st.button(
+        "Search",
+        use_container_width=True,
+    ):
 
         if search_query.strip():
 
@@ -349,19 +539,27 @@ with st.sidebar:
             )
 
             if search_result:
+
                 st.write(
-                    f"Results: {search_result.get('total_results', 0)}"
+                    f"Results: "
+                    f"{search_result.get('total_results', 0)}"
                 )
 
-                for item in search_result.get("results", []):
+                for item in search_result.get(
+                    "results",
+                    [],
+                ):
                     st.write(item)
 
         else:
-            st.warning("Enter a search keyword.")
+            st.warning(
+                "Enter a search keyword."
+            )
 
     # DOCUMENT MANAGEMENT
 
     st.divider()
+
     st.subheader("📁 Document Management")
 
     uploaded_file = st.file_uploader(
@@ -376,42 +574,59 @@ with st.sidebar:
 
         if uploaded_file:
 
-            with st.spinner("Uploading and indexing document..."):
+            with st.spinner(
+                "Uploading and indexing document..."
+            ):
 
-                upload_result = upload_document(uploaded_file)
+                upload_result = upload_document(
+                    uploaded_file
+                )
 
             if upload_result:
-                st.success("Document indexed successfully!")
-                st.json(upload_result)
 
+                st.success(
+                    "Document indexed successfully!"
+                )
+
+                st.json(upload_result)
                 st.rerun()
 
         else:
-            st.warning("Please select a document first.")
+            st.warning(
+                "Please select a document first."
+            )
 
-    # DOCUMENT LIST
-
-    if st.button("🔄 Refresh Documents", use_container_width=True):
+    if st.button(
+        "🔄 Refresh Documents",
+        use_container_width=True,
+    ):
 
         st.session_state.refresh_documents = True
+        st.rerun()
 
     documents_data = api_get("/documents")
 
     if documents_data:
 
         st.caption(
-            f"Total documents: {documents_data.get('total_documents', 0)}"
+            f"Total documents: "
+            f"{documents_data.get('total_documents', 0)}"
         )
 
-        for document in documents_data.get("documents", []):
+        for document in documents_data.get(
+            "documents",
+            [],
+        ):
 
             st.write(
-                f"📄 {document['filename']}"
+                f"📄 {document.get('filename', 'Unknown file')}"
             )
 
     st.divider()
 
-    st.caption("Built with FastAPI • LangChain • ChromaDB • RAGAS")
+    st.caption(
+        "Built with FastAPI • LangChain • ChromaDB • RAGAS"
+    )
 
 
 # =====================================================
@@ -424,6 +639,7 @@ st.markdown(
     "Ask questions from your documents and evaluate "
     "your Retrieval Augmented Generation system."
 )
+
 
 # =====================================================
 # TABS
@@ -442,25 +658,38 @@ chat_tab, evaluation_tab, reports_tab = st.tabs([
 
 with chat_tab:
 
-    st.subheader("Chat with your Documents")
+    st.subheader(
+        "Chat with your Documents"
+    )
 
     if st.session_state.session_id:
+
         st.caption(
-            f"Active Session: {st.session_state.session_id}"
+            f"Active Session: "
+            f"{st.session_state.session_id}"
         )
 
     # DISPLAY CHAT MESSAGES
 
     for message in st.session_state.messages:
 
-        role = message.get("role", "assistant")
-        content = message.get("content", "")
+        role = message.get(
+            "role",
+            "assistant",
+        )
+
+        content = message.get(
+            "content",
+            "",
+        )
 
         with st.chat_message(role):
 
             st.markdown(content)
 
-            display_sources(message.get("sources", []))
+            display_sources(
+                message.get("sources", [])
+            )
 
     # CHAT INPUT
 
@@ -476,175 +705,10 @@ with chat_tab:
 
         st.rerun()
 
+    if question:
 
-# =====================================================
-# TAB 2: RAGAS EVALUATION
-# =====================================================
+            with st.spinner("AI is thinking..."):
 
-with evaluation_tab:
+                send_message(question)
 
-    st.subheader("📊 RAGAS Evaluation Dashboard")
-
-    st.write(
-        "Evaluate your chatbot using the saved evaluation dataset."
-    )
-
-    st.warning(
-        "Evaluation makes LLM API calls and may take some time."
-    )
-
-    if st.button(
-        "🚀 Run RAGAS Evaluation",
-        type="primary",
-        use_container_width=True,
-    ):
-
-        with st.spinner(
-            "Running RAGAS evaluation. Please wait..."
-        ):
-
-            evaluation_response = api_post(
-                "/evaluation/run"
-            )
-
-        if evaluation_response:
-
-            st.session_state.evaluation_result = (
-                evaluation_response.get("evaluation")
-            )
-
-            st.success("Evaluation completed successfully!")
-
-    # DISPLAY EVALUATION
-
-    evaluation = st.session_state.evaluation_result
-
-    if evaluation:
-
-        st.divider()
-        st.subheader("Evaluation Results")
-
-        st.json(evaluation)
-
-        # Try to display average metrics if available
-
-        if isinstance(evaluation, dict):
-
-            metrics = evaluation.get("average_scores")
-
-            if not isinstance(metrics, dict):
-                metrics = evaluation.get("metrics")
-
-            if isinstance(metrics, dict) and metrics:
-
-                cols = st.columns(len(metrics))
-
-                for col, (metric, score) in zip(cols, metrics.items()):
-
-                    try:
-                        with col:
-                            st.metric(
-                                label=metric.replace("_", " ").title(),
-                                value=round(float(score), 4),
-                            )
-                    except (ValueError, TypeError):
-                        pass
-
-        st.info(
-            "Detailed evaluation output is displayed above."
-        )
-
-    else:
-
-        st.info(
-            "Run evaluation to see your RAGAS results here."
-        )
-
-
-# =====================================================
-# TAB 3: REPORT GENERATION
-# =====================================================
-
-with reports_tab:
-
-    st.subheader("📄 Evaluation Reports")
-
-    st.write(
-        "Generate JSON, CSV and PDF reports from the latest saved evaluation."
-    )
-
-    if st.button(
-        "📑 Generate Reports",
-        type="primary",
-        use_container_width=True,
-    ):
-
-        with st.spinner("Generating reports..."):
-
-            report_response = api_post(
-                "/evaluation/reports/generate"
-            )
-
-        if report_response:
-
-            st.session_state.generated_reports = report_response
-
-            st.success("Reports generated successfully!")
-
-    # DISPLAY GENERATED REPORTS
-
-    report_data = st.session_state.generated_reports
-
-    if report_data:
-
-        st.json(report_data)
-
-        filenames = find_report_filenames(report_data)
-
-        if filenames:
-
-            st.divider()
-            st.subheader("⬇️ Download Reports")
-
-            for filename in filenames:
-
-                file_content = download_report(filename)
-
-                if file_content:
-
-                    st.download_button(
-                        label=f"Download {Path(filename).suffix.upper()}",
-                        data=file_content,
-                        file_name=filename,
-                        mime={
-                            ".json": "application/json",
-                            ".csv": "text/csv",
-                            ".pdf": "application/pdf",
-                        }.get(Path(filename).suffix.lower(), "application/octet-stream"),
-                        key=f"download_{filename}",
-                        use_container_width=True,
-                    )
-
-        else:
-
-            st.warning(
-                "Report filenames were not found in the API response. "
-                "Check the response shown above."
-            )
-
-    else:
-
-        st.info(
-            "First run RAGAS evaluation, then generate reports."
-        )
-
-
-# =====================================================
-# FOOTER
-# =====================================================
-
-st.divider()
-
-st.caption(
-    "RAGAS AI Assistant | FastAPI + Streamlit + LangChain + ChromaDB"
-)
+            st.rerun()
