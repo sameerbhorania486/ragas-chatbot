@@ -6,9 +6,6 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 from app.core.config import CHROMA_DB_PATH, TOP_K
 
-MAX_DISTANCE = 1.70
-
-# New lightweight embedding model
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 
@@ -38,15 +35,28 @@ def get_retriever():
 
 
 def retrieve_documents(question: str):
-    results = get_vector_store().similarity_search_with_score(
+    vector_store = get_vector_store()
+
+    results = vector_store.similarity_search_with_score(
         question,
         k=TOP_K,
     )
 
-    filtered_documents = [
-        document
-        for document, distance in results
-        if distance <= MAX_DISTANCE
-    ]
+    print("\n========== RETRIEVAL DEBUG ==========")
+    print("Question:", question)
+    print("Database path:", CHROMA_DB_PATH)
+    print("Collection:", "ragas_documents_fastembed_v1")
+    print("TOP_K:", TOP_K)
+    print("Retrieved count:", len(results))
 
-    return filtered_documents
+    for index, (document, distance) in enumerate(results, start=1):
+        print(f"\nResult {index}")
+        print("Distance:", distance)
+        print("Source:", document.metadata.get("source"))
+        print("Content:", document.page_content[:300])
+
+    print("====================================\n")
+
+    # Temporary: return all retrieved documents.
+    # We will apply distance filtering after checking scores.
+    return [document for document, distance in results]
