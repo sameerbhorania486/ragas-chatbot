@@ -8,16 +8,6 @@ from fastapi.responses import FileResponse
 from app.core.config import DOCUMENTS_PATH, REPORTS_PATH
 from app.schemas.models import QuestionRequest, ChatRequest
 
-from app.services.ingestion import ingest_document
-from app.services.rag import generate_answer
-
-from app.services.evaluator import (
-    run_evaluation,
-    load_saved_evaluation,
-)
-
-from app.services.report_generator import generate_reports
-
 from app.services.chat_memory import (
     initialize_chat_database,
     save_message,
@@ -92,6 +82,9 @@ async def upload_document(file: UploadFile = File(...)):
     destination = DOCUMENTS_PATH / filename
 
     try:
+        # Lazy import
+        from app.services.ingestion import ingest_document
+
         destination.write_bytes(content)
 
         result = ingest_document(str(destination))
@@ -143,6 +136,9 @@ def list_documents():
 def question_answering(request: QuestionRequest):
 
     try:
+        # Lazy import
+        from app.services.rag import generate_answer
+
         result = generate_answer(
             question=request.question
         )
@@ -172,6 +168,9 @@ def conversational_chat(request: ChatRequest):
     session_id = request.session_id or str(uuid4())
 
     try:
+        # Lazy import
+        from app.services.rag import generate_answer
+
         # Load previous messages
         history = get_chat_history(
             session_id=session_id,
@@ -420,6 +419,9 @@ def clear_session_history(session_id: str):
 def evaluate_chatbot():
 
     try:
+        # Lazy import
+        from app.services.evaluator import run_evaluation
+
         result = run_evaluation()
 
         return {
@@ -455,6 +457,10 @@ def evaluate_chatbot():
 def generate_saved_reports():
 
     try:
+        # Lazy imports
+        from app.services.evaluator import load_saved_evaluation
+        from app.services.report_generator import generate_reports
+
         evaluation = load_saved_evaluation()
 
         reports = generate_reports(evaluation)

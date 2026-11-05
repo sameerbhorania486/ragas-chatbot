@@ -2,32 +2,29 @@
 from functools import lru_cache
 
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
-from app.core.config import (
-    CHROMA_DB_PATH,
-    EMBEDDING_MODEL,
-    TOP_K,
-)
+from app.core.config import CHROMA_DB_PATH, TOP_K
 
-# Similarity threshold
-# Lower distance means more similar in Chroma distance search.
 MAX_DISTANCE = 1.70
+
+# New lightweight embedding model
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 
 @lru_cache(maxsize=1)
 def get_embeddings():
-    return HuggingFaceEmbeddings(
+    return FastEmbedEmbeddings(
         model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True},
+        max_length=512,
+        threads=2,
     )
 
 
 @lru_cache(maxsize=1)
 def get_vector_store():
     return Chroma(
-        collection_name="ragas_documents",
+        collection_name="ragas_documents_fastembed_v1",
         embedding_function=get_embeddings(),
         persist_directory=str(CHROMA_DB_PATH),
     )
@@ -46,7 +43,6 @@ def retrieve_documents(question: str):
         k=TOP_K,
     )
 
-    # Keep only documents within the distance threshold
     filtered_documents = [
         document
         for document, distance in results

@@ -3,13 +3,6 @@ import json
 import math
 from datetime import datetime
 
-from datasets import Dataset
-from ragas import evaluate
-from ragas.metrics import (
-    faithfulness,
-    answer_relevancy,
-)
-
 from app.core.config import EVALUATION_PATH
 from app.services.rag import generate_answer
 from app.services.llm import get_llm
@@ -48,6 +41,14 @@ def run_evaluation():
     """Run RAGAS evaluation and save actual results."""
 
     evaluation_data = load_evaluation_dataset()
+
+    # Lazy loading: heavy libraries load only during evaluation
+    from datasets import Dataset
+    from ragas import evaluate
+    from ragas.metrics import (
+        faithfulness,
+        answer_relevancy,
+    )
 
     questions = []
     answers = []
@@ -123,9 +124,7 @@ def run_evaluation():
     # Step 7: Save actual evaluation result
     EVALUATION_PATH.mkdir(parents=True, exist_ok=True)
 
-    result_path = (
-        EVALUATION_PATH / "latest_evaluation.json"
-    )
+    result_path = EVALUATION_PATH / "latest_evaluation.json"
 
     with open(result_path, "w", encoding="utf-8") as file:
         json.dump(
