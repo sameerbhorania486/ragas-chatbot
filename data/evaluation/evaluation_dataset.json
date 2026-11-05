@@ -1,0 +1,22 @@
+[
+  {
+    "question": "How many casual leaves do employees get every year?",
+    "ground_truth": "Employees receive 12 casual leaves every year."
+  },
+  {
+    "question": "How many earned leaves do employees get every year?",
+    "ground_truth": "Employees receive 15 earned leaves every year."
+  },
+  {
+    "question": "What are the company working hours?",
+    "ground_truth": "The company working hours are 9:30 AM to 6:30 PM."
+  },
+  {
+    "question": "When is salary credited?",
+    "ground_truth": "Salary is credited on the last working day of every month."
+  },
+  {
+    "question": "Which days are weekly holidays?",
+    "ground_truth": "Saturday and Sunday are weekly holidays."
+  }
+]

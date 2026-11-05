@@ -10,7 +10,8 @@ venv_old/
 chroma_db/
 
 # Evaluation and generated reports
-data/evaluation/
+data/evaluation/*
+!data/evaluation/evaluation_dataset.json
 reports/
 
 # IDE
