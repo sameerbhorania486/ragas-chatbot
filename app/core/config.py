@@ -23,9 +23,8 @@ EMBEDDING_MODEL = os.getenv(
 )
 
 # Database configuration
-CHROMA_DB_PATH = BASE_DIR / os.getenv(
-    "CHROMA_DB_PATH", "./chroma_db"
-)
+CHROMA_DB_PATH = BASE_DIR / "chroma_db"
+
 
 # Document configuration
 DOCUMENTS_PATH = BASE_DIR / os.getenv(
